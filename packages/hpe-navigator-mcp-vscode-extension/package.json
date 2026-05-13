@@ -80,6 +80,11 @@
           "type": "boolean",
           "default": true,
           "description": "Enable or disable the HPE Navigator MCP server"
+        },
+        "hpeNavigator.oktaRedirectUri": {
+          "type": "string",
+          "default": "https://navigator.service.suptools.hpecorp.net/oidc/callback",
+          "description": "Okta redirect URI registered in the Okta application. The Navigator OIDC callback relays the CXO token back to the MCP server via the state parameter."
         }
       }
     }
@@ -94,6 +99,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
+    "@types/node": "^20",
     "@types/vscode": "^1.99.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",

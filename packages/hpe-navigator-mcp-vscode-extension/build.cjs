@@ -30,4 +30,11 @@ let content = fs.readFileSync(serverFile, 'utf8')
 content = content.replace(/^(?:[^\n]*\n)?#![^\n]*\n/, '')
 fs.writeFileSync(serverFile, content)
 
+// 4. Copy root LICENSE into extension dir (required by @vscode/vsce)
+const rootLicense = path.resolve(__dirname, '../../LICENSE')
+const extLicense = path.resolve(__dirname, 'LICENSE')
+if (fs.existsSync(rootLicense)) {
+  fs.copyFileSync(rootLicense, extLicense)
+}
+
 console.log('✅ Extension and server bundled successfully')

@@ -54,3 +54,52 @@ describe('navigator_get_system_summary', () => {
     expect(parsed.errors).toHaveLength(1)
   })
 })
+
+import { getDscvmLogs } from '../src/tools/composite.js'
+import { bundlesResponse, MOCK_DSC_SERIAL } from './fixtures/index.js'
+
+describe('navigator_get_dscvm_logs', () => {
+  const mockNavClient = { listBundles: vi.fn() }
+  const mockExtClient = { downloadBundle: vi.fn() }
+
+  beforeEach(() => vi.clearAllMocks())
+
+  it('lists dailylog and complog bundles by default', async () => {
+    mockNavClient.listBundles.mockResolvedValue(bundlesResponse)
+    const result = await getDscvmLogs(mockNavClient as any, mockExtClient as any, {
+      serial: MOCK_DSC_SERIAL,
+      date: '2026-05-13',
+      download: false,
+      includeComplog: true,
+    })
+    expect(result.isError).toBeUndefined()
+    const parsed = JSON.parse(result.content[0].text)
+    expect(parsed.results).toHaveLength(2)
+    expect(parsed.results[0].type).toBe('dailylog')
+  })
+
+  it('downloads bundles when download=true', async () => {
+    mockNavClient.listBundles.mockResolvedValue(bundlesResponse)
+    mockExtClient.downloadBundle.mockResolvedValue({ localPath: '/tmp/file.tar.gz', size: 1024 })
+    const result = await getDscvmLogs(mockNavClient as any, mockExtClient as any, {
+      serial: MOCK_DSC_SERIAL,
+      date: '2026-05-13',
+      download: true,
+      includeComplog: false,
+    })
+    expect(result.isError).toBeUndefined()
+    const parsed = JSON.parse(result.content[0].text)
+    expect(parsed.results[0].downloaded).toBeDefined()
+  })
+
+  it('returns error on failure', async () => {
+    mockNavClient.listBundles.mockRejectedValue(new Error('network error'))
+    const result = await getDscvmLogs(mockNavClient as any, mockExtClient as any, {
+      serial: MOCK_DSC_SERIAL,
+      date: '2026-05-13',
+      download: false,
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain('network error')
+  })
+})

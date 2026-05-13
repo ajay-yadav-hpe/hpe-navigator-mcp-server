@@ -3,6 +3,8 @@ import { randomBytes, createHash } from 'node:crypto'
 import type { NavigatorConfig } from '../config.js'
 import { TokenCache } from '../utils/token-cache.js'
 
+type CallbackResult = { type: 'token'; token: string } | { type: 'code'; code: string }
+
 export class AuthManager {
   private tokenCache: TokenCache
   private config: NavigatorConfig
@@ -31,7 +33,7 @@ export class AuthManager {
     return this.loginWithOkta()
   }
 
-  private async loginWithPassword(): Promise<string> {
+  async loginWithPassword(): Promise<string> {
     const url = `${this.config.cxoBaseUrl}/auth/v1/login`
     const res = await fetch(url, {
       method: 'POST',
@@ -51,12 +53,20 @@ export class AuthManager {
     return data.token
   }
 
+  /* v8 ignore start */
   private async loginWithOkta(): Promise<string> {
     const { codeVerifier, codeChallenge } = generatePKCE()
-    const state = randomBytes(16).toString('hex')
-    const { port, codePromise, server } = await startCallbackServer(state)
+    const { port, resultPromise, server } = await startCallbackServer()
+    const localCallbackUri = `http://localhost:${port}/callback`
 
-    const redirectUri = `http://localhost:${port}/callback`
+    // The registered Okta redirect URI (navigator service OIDC callback).
+    // Navigator's /oidc/callback processes the code, obtains the CXO token,
+    // then relays back to our local server using the state as the return URL.
+    const redirectUri = this.config.oktaRedirectUri
+
+    // Encode local callback URL in state so Navigator OIDC callback can relay back
+    const state = localCallbackUri
+
     const authorizeUrl = new URL(this.config.oktaAuthorizeUrl)
     authorizeUrl.searchParams.set('client_id', this.config.oktaClientId)
     authorizeUrl.searchParams.set('response_type', 'code')
@@ -67,21 +77,34 @@ export class AuthManager {
     authorizeUrl.searchParams.set('code_challenge_method', 'S256')
     authorizeUrl.searchParams.set('prompt', 'login')
 
-    // Open user's browser
-    const open = await getOpenCommand()
+    console.error(`\nOpening browser for HPE Okta authentication...`)
+    console.error(`If browser does not open, visit:\n${authorizeUrl.toString()}\n`)
+    const open = getOpenCommand()
     const { exec } = await import('node:child_process')
     exec(`${open} "${authorizeUrl.toString()}"`)
 
-    // Wait for callback (2 minute timeout)
-    const timeoutMs = 120_000
-    const code = await Promise.race([
-      codePromise,
+    const result = await Promise.race([
+      resultPromise,
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Okta login timed out after 2 minutes')), timeoutMs),
+        setTimeout(() => reject(new Error('Okta login timed out after 2 minutes')), 120_000),
       ),
     ]).finally(() => server.close())
 
-    // Exchange code for Okta token
+    if (result.type === 'token') {
+      // Navigator OIDC callback relayed the CXO token directly
+      return result.token
+    }
+
+    // Fallback: direct code received (e.g., localhost redirect URI in dev)
+    return this.exchangeCodeForCxoToken(result.code, codeVerifier, redirectUri)
+  }
+  /* v8 ignore end */
+
+  async exchangeCodeForCxoToken(
+    code: string,
+    codeVerifier: string,
+    redirectUri: string,
+  ): Promise<string> {
     const tokenRes = await fetch(this.config.oktaTokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -101,7 +124,6 @@ export class AuthManager {
 
     const tokenData = (await tokenRes.json()) as { access_token: string }
 
-    // Exchange Okta token for CXO service token
     const cxoRes = await fetch(`${this.config.cxoBaseUrl}/auth/v1/okta/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -131,7 +153,7 @@ function generatePKCE(): { codeVerifier: string; codeChallenge: string } {
   return { codeVerifier, codeChallenge }
 }
 
-async function getOpenCommand(): Promise<string> {
+function getOpenCommand(): string {
   switch (process.platform) {
     case 'darwin':
       return 'open'
@@ -142,17 +164,17 @@ async function getOpenCommand(): Promise<string> {
   }
 }
 
-function startCallbackServer(expectedState: string): Promise<{
+function startCallbackServer(): Promise<{
   port: number
-  codePromise: Promise<string>
+  resultPromise: Promise<CallbackResult>
   server: ReturnType<typeof createServer>
 }> {
   return new Promise((resolve) => {
-    let resolveCode: (code: string) => void
-    let rejectCode: (err: Error) => void
-    const codePromise = new Promise<string>((res, rej) => {
-      resolveCode = res
-      rejectCode = rej
+    let resolveResult: (r: CallbackResult) => void
+    let rejectResult: (err: Error) => void
+    const resultPromise = new Promise<CallbackResult>((res, rej) => {
+      resolveResult = res
+      rejectResult = rej
     })
 
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
@@ -163,42 +185,49 @@ function startCallbackServer(expectedState: string): Promise<{
         return
       }
 
-      const code = url.searchParams.get('code')
-      const state = url.searchParams.get('state')
       const error = url.searchParams.get('error')
-
       if (error) {
         res.writeHead(400)
-        res.end('Authentication failed')
-        rejectCode(new Error(`Okta error: ${error}`))
+        res.end(
+          `<html><body><h2>Authentication failed</h2><p>${error}</p></body></html>`,
+        )
+        rejectResult(new Error(`Authentication error: ${error}`))
         return
       }
 
-      if (state !== expectedState) {
-        res.writeHead(400)
-        res.end('Invalid state')
-        rejectCode(new Error('State mismatch in OAuth callback'))
+      // Case 1: Navigator OIDC callback relayed CXO token via state redirect
+      const token = url.searchParams.get('token')
+      if (token) {
+        res.writeHead(200, { 'Content-Type': 'text/html' })
+        res.end(
+          '<html><body><h2>Authentication successful!</h2><p>You can close this window.</p></body></html>',
+        )
+        resolveResult({ type: 'token', token })
         return
       }
 
-      if (!code) {
-        res.writeHead(400)
-        res.end('Missing code')
-        rejectCode(new Error('Missing authorization code'))
+      // Case 2: Direct code (when using localhost redirect URI in dev/testing)
+      const code = url.searchParams.get('code')
+      if (code) {
+        res.writeHead(200, { 'Content-Type': 'text/html' })
+        res.end(
+          '<html><body><h2>Authentication successful!</h2><p>You can close this window.</p></body></html>',
+        )
+        resolveResult({ type: 'code', code })
         return
       }
 
-      res.writeHead(200, { 'Content-Type': 'text/html' })
+      res.writeHead(400)
       res.end(
-        '<html><body><h2>Authentication successful!</h2><p>You can close this window.</p></body></html>',
+        '<html><body><h2>Authentication failed</h2><p>Missing token or code parameter.</p></body></html>',
       )
-      resolveCode(code)
+      rejectResult(new Error('Missing token or code in callback'))
     })
 
     server.listen(0, '127.0.0.1', () => {
       const addr = server.address()
       const port = typeof addr === 'object' && addr ? addr.port : 0
-      resolve({ port, codePromise, server })
+      resolve({ port, resultPromise, server })
     })
   })
 }

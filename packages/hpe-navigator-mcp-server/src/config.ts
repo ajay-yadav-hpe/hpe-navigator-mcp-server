@@ -18,6 +18,10 @@ const configSchema = z.object({
     .string()
     .url()
     .default('https://mylogin.hpe.com/oauth2/aus5016946Vxb1HI6697/v1/token'),
+  oktaRedirectUri: z
+    .string()
+    .url()
+    .default('https://navigator.service.suptools.hpecorp.net/oidc/callback'),
   callbackPort: z.coerce.number().int().min(0).default(0),
   tokenRefreshBufferMs: z.coerce.number().int().positive().default(300_000),
   timeoutMs: z.coerce.number().int().positive().default(30_000),
@@ -39,6 +43,7 @@ export function loadConfig(): NavigatorConfig {
     oktaClientId: env.HPE_NAV_OKTA_CLIENT_ID,
     oktaAuthorizeUrl: env.HPE_NAV_OKTA_AUTHORIZE_URL,
     oktaTokenUrl: env.HPE_NAV_OKTA_TOKEN_URL,
+    oktaRedirectUri: env.HPE_NAV_OKTA_REDIRECT_URI,
     callbackPort: env.HPE_NAV_CALLBACK_PORT,
     tokenRefreshBufferMs: env.HPE_NAV_TOKEN_REFRESH_BUFFER_MS,
     timeoutMs: env.HPE_NAV_TIMEOUT_MS,
