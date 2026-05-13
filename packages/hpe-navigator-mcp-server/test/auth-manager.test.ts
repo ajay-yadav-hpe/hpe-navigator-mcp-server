@@ -76,10 +76,17 @@ describe('AuthManager', () => {
       )
     })
 
-    it('throws on HTTP error', async () => {
+    it('throws when HTTP error', async () => {
       fetchMock.mockResolvedValue(mockFetchRes({}, false, 401))
       const auth = new AuthManager({ ...baseConfig, username: 'u@hpe.com', password: 'wrong' })
       await expect(auth.loginWithPassword()).rejects.toThrow('Login failed: 401')
+    })
+
+    it('throws with network context when fetch itself throws', async () => {
+      const cause = new Error('UNABLE_TO_VERIFY_LEAF_SIGNATURE')
+      fetchMock.mockRejectedValue(Object.assign(new Error('fetch failed'), { cause }))
+      const auth = new AuthManager({ ...baseConfig, username: 'u@hpe.com', password: 'pass' })
+      await expect(auth.loginWithPassword()).rejects.toThrow('UNABLE_TO_VERIFY_LEAF_SIGNATURE')
     })
 
     it('caches token and reuses it', async () => {
@@ -110,7 +117,11 @@ describe('AuthManager', () => {
         .mockResolvedValueOnce(mockFetchRes({ access_token: 'okta-access-token' }))
         .mockResolvedValueOnce(mockFetchRes({ token: cxoToken }))
       const auth = new AuthManager(baseConfig)
-      const result = await auth.exchangeCodeForCxoToken('auth-code', 'code-verifier', 'https://nav.example.com/oidc/callback')
+      const result = await auth.exchangeCodeForCxoToken(
+        'auth-code',
+        'code-verifier',
+        'https://nav.example.com/oidc/callback',
+      )
       expect(result).toBe(cxoToken)
     })
 

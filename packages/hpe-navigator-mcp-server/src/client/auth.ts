@@ -13,7 +13,9 @@ export class AuthManager {
     this.config = config
     this.tokenCache = new TokenCache(config.tokenRefreshBufferMs)
     if (config.serviceToken) {
-      this.tokenCache.set(config.serviceToken)
+      // Strip "Bearer " prefix — users often copy it verbatim from browser DevTools
+      const rawToken = config.serviceToken.replace(/^Bearer\s+/i, '')
+      this.tokenCache.set(rawToken)
     }
   }
 
@@ -30,20 +32,26 @@ export class AuthManager {
     if (this.config.username && this.config.password) {
       return this.loginWithPassword()
     }
+    // v8 ignore next — Okta browser flow, covered by /* v8 ignore start/end */ below
     return this.loginWithOkta()
   }
 
   async loginWithPassword(): Promise<string> {
     const url = `${this.config.cxoBaseUrl}/auth/v1/login`
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: this.config.username,
-        password: this.config.password,
-      }),
-      signal: AbortSignal.timeout(this.config.timeoutMs),
-    })
+    let res: Response
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: this.config.username,
+          password: this.config.password,
+        }),
+        signal: AbortSignal.timeout(this.config.timeoutMs),
+      })
+    } catch (err) {
+      throw wrapFetchError(err, url)
+    }
 
     if (!res.ok) {
       throw new Error(`Login failed: ${res.status} ${res.statusText}`)
@@ -77,11 +85,20 @@ export class AuthManager {
     authorizeUrl.searchParams.set('code_challenge_method', 'S256')
     authorizeUrl.searchParams.set('prompt', 'login')
 
-    console.error(`\nOpening browser for HPE Okta authentication...`)
-    console.error(`If browser does not open, visit:\n${authorizeUrl.toString()}\n`)
+    console.error(`\n═══════════════════════════════════════════════════════════`)
+    console.error(`  HPE Navigator — Okta Authentication Required`)
+    console.error(`═══════════════════════════════════════════════════════════`)
+    console.error(`  Local callback server listening on port ${port}`)
+    console.error(`  Waiting for redirect to: ${localCallbackUri}`)
+    console.error(`  Opening browser...`)
+    console.error(`  If browser does not open, visit:`)
+    console.error(`  ${authorizeUrl.toString()}`)
+    console.error(`═══════════════════════════════════════════════════════════\n`)
     const open = getOpenCommand()
     const { exec } = await import('node:child_process')
-    exec(`${open} "${authorizeUrl.toString()}"`)
+    exec(`${open} "${authorizeUrl.toString()}"`, (execErr) => {
+      if (execErr) console.error(`  Warning: failed to open browser: ${execErr.message}`)
+    })
 
     const result = await Promise.race([
       resultPromise,
@@ -105,18 +122,23 @@ export class AuthManager {
     codeVerifier: string,
     redirectUri: string,
   ): Promise<string> {
-    const tokenRes = await fetch(this.config.oktaTokenUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        code_verifier: codeVerifier,
-        client_id: this.config.oktaClientId,
-        redirect_uri: redirectUri,
-      }),
-      signal: AbortSignal.timeout(this.config.timeoutMs),
-    })
+    let tokenRes: Response
+    try {
+      tokenRes = await fetch(this.config.oktaTokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code,
+          code_verifier: codeVerifier,
+          client_id: this.config.oktaClientId,
+          redirect_uri: redirectUri,
+        }),
+        signal: AbortSignal.timeout(this.config.timeoutMs),
+      })
+    } catch (err) {
+      throw wrapFetchError(err, this.config.oktaTokenUrl)
+    }
 
     if (!tokenRes.ok) {
       throw new Error(`Okta token exchange failed: ${tokenRes.status}`)
@@ -145,6 +167,23 @@ export class AuthManager {
   clearToken(): void {
     this.tokenCache.clear()
   }
+}
+
+function wrapFetchError(err: unknown, url: string): Error {
+  const hostname = (() => {
+    try {
+      return new URL(url).hostname
+    } catch {
+      return url
+    }
+  })()
+  const cause = err instanceof Error ? (err as Error & { cause?: unknown }).cause : undefined
+  const detail = cause instanceof Error ? `: ${cause.message}` : ''
+  return new Error(
+    `Network error reaching ${hostname}${detail}. ` +
+      `Ensure HPE VPN is active. ` +
+      `If certificate errors occur, set HPE_NAV_TLS_REJECT_UNAUTHORIZED=false in extension settings.`,
+  )
 }
 
 function generatePKCE(): { codeVerifier: string; codeChallenge: string } {
@@ -188,9 +227,7 @@ function startCallbackServer(): Promise<{
       const error = url.searchParams.get('error')
       if (error) {
         res.writeHead(400)
-        res.end(
-          `<html><body><h2>Authentication failed</h2><p>${error}</p></body></html>`,
-        )
+        res.end(`<html><body><h2>Authentication failed</h2><p>${error}</p></body></html>`)
         rejectResult(new Error(`Authentication error: ${error}`))
         return
       }
@@ -224,7 +261,9 @@ function startCallbackServer(): Promise<{
       rejectResult(new Error('Missing token or code in callback'))
     })
 
-    server.listen(0, '127.0.0.1', () => {
+    // Listen on all interfaces (no host) so both 127.0.0.1 (IPv4) and ::1 (IPv6)
+    // are reachable — macOS resolves 'localhost' to ::1 by default in modern versions
+    server.listen(0, () => {
       const addr = server.address()
       const port = typeof addr === 'object' && addr ? addr.port : 0
       resolve({ port, resultPromise, server })

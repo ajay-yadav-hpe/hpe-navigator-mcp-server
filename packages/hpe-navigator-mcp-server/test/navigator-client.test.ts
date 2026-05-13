@@ -68,7 +68,9 @@ describe('NavigatorClient', () => {
     expect(result.data[0].product).toBe('arcus')
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining(`/nav/v1/find/${MOCK_SERIAL}`),
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: expect.stringContaining('Bearer') }) }),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: expect.stringContaining('Bearer') }),
+      }),
     )
   })
 
@@ -123,8 +125,18 @@ describe('NavigatorClient', () => {
 
   it('listBundles passes latest param', async () => {
     fetchMock.mockResolvedValue(mockRes(bundlesResponse))
-    await client.listBundles('arcus', MOCK_SERIAL, '2026-05-08T00:00:00Z', '2026-05-13T23:59:59Z', undefined, true)
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('latest=true'), expect.any(Object))
+    await client.listBundles(
+      'arcus',
+      MOCK_SERIAL,
+      '2026-05-08T00:00:00Z',
+      '2026-05-13T23:59:59Z',
+      undefined,
+      true,
+    )
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('latest=true'),
+      expect.any(Object),
+    )
   })
 
   it('searchDashboards returns dashboards', async () => {
@@ -140,7 +152,12 @@ describe('NavigatorClient', () => {
 
   it('retries on 429 rate limit', async () => {
     fetchMock
-      .mockResolvedValueOnce({ ok: false, status: 429, statusText: 'Too Many Requests', headers: { get: () => '0' } } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: 'Too Many Requests',
+        headers: { get: () => '0' },
+      } as unknown as Response)
       .mockResolvedValueOnce(mockRes(findResponse))
     const result = await client.findSerial(MOCK_SERIAL)
     expect(result.data[0].product).toBe('arcus')
@@ -149,9 +166,47 @@ describe('NavigatorClient', () => {
 
   it('re-authenticates on 401 and retries', async () => {
     fetchMock
-      .mockResolvedValueOnce({ ok: false, status: 401, statusText: 'Unauthorized', json: () => Promise.resolve({}), headers: { get: () => null } } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        json: () => Promise.resolve({}),
+        headers: { get: () => null },
+      } as unknown as Response)
       .mockResolvedValueOnce(mockRes(findResponse))
     const result = await client.findSerial(MOCK_SERIAL)
     expect(result.data[0].product).toBe('arcus')
+  })
+
+  it('throws when 401 retry also fails', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        json: () => Promise.resolve({}),
+        headers: { get: () => null },
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        statusText: 'Forbidden',
+        json: () => Promise.resolve({}),
+        headers: { get: () => null },
+      } as unknown as Response)
+    await expect(client.findSerial(MOCK_SERIAL)).rejects.toThrow('API error: 403')
+  })
+
+  it('exposes root certificate error cause in message', async () => {
+    const causeErr = new Error('CERT_HAS_EXPIRED')
+    const fetchErr = Object.assign(new Error('fetch failed'), { cause: causeErr })
+    fetchMock.mockRejectedValue(fetchErr)
+    await expect(client.findSerial(MOCK_SERIAL)).rejects.toThrow('CERT_HAS_EXPIRED')
+  })
+
+  it('exhausts all retries on persistent network errors', async () => {
+    fetchMock.mockRejectedValue(new Error('ECONNREFUSED'))
+    await expect(client.findSerial(MOCK_SERIAL)).rejects.toThrow()
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 })

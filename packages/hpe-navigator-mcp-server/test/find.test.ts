@@ -27,6 +27,13 @@ describe('navigator_find_serial', () => {
     expect(result.content[0].text).toContain('Network timeout')
   })
 
+  it('uses fallback message when non-Error is thrown', async () => {
+    mockClient.findSerial.mockRejectedValue('raw string error')
+    const result = await findSerial(mockClient as any, { serial: 'X' })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Failed to find serial')
+  })
+
   it('should validate input schema', () => {
     expect(() => findSerialSchema.parse({ serial: '' })).toThrow()
     expect(findSerialSchema.parse({ serial: 'CZ2D3J050T' })).toEqual({ serial: 'CZ2D3J050T' })

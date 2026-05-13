@@ -52,7 +52,9 @@ export class ExtractionClient {
     const localPath = join(resolvedDir, safeFilename)
 
     // Verify the output path is within the download directory
+    // (redundant after basename() but kept as defence-in-depth)
     const normalizedPath = normalize(localPath)
+    /* v8 ignore next 3 */
     if (!normalizedPath.startsWith(resolvedDir)) {
       throw new Error('Invalid filename: path traversal detected')
     }

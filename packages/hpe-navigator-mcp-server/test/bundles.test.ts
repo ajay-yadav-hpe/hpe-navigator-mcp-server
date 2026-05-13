@@ -15,6 +15,13 @@ describe('navigator_list_filetypes', () => {
     expect(parsed.data).toHaveLength(4)
     expect(parsed.data[0].filetype).toBe('config')
   })
+
+  it('uses fallback message when non-Error is thrown', async () => {
+    mockClient.listFiletypes.mockRejectedValue('timeout')
+    const result = await listFiletypes(mockClient as any, { product: 'arcus' })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Failed to list filetypes')
+  })
 })
 
 describe('navigator_list_bundles', () => {
@@ -48,5 +55,18 @@ describe('navigator_list_bundles', () => {
       latest: false,
     })
     expect(result.isError).toBe(true)
+  })
+
+  it('uses fallback message when non-Error is thrown', async () => {
+    mockClient.listBundles.mockRejectedValue('quota exceeded')
+    const result = await listBundles(mockClient as any, {
+      product: 'arcus',
+      serial: 'CZ2D3J050T',
+      fromTs: '2026-05-08T00:00:00.000Z',
+      toTs: '2026-05-13T23:59:59.000Z',
+      latest: false,
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Failed to list bundles')
   })
 })

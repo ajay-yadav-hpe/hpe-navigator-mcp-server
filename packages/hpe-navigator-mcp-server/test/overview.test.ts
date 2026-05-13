@@ -32,4 +32,11 @@ describe('navigator_get_overview', () => {
     })
     expect(result.isError).toBe(true)
   })
+
+  it('uses fallback message when non-Error is thrown', async () => {
+    mockClient.getOverview.mockRejectedValue(42)
+    const result = await getOverview(mockClient as any, { product: 'arcus', serial: 'X' })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Failed to get overview')
+  })
 })

@@ -39,6 +39,9 @@ export function activate(context: vscode.ExtensionContext) {
             HPE_NAV_OKTA_REDIRECT_URI:
               config.get<string>('oktaRedirectUri') ??
               'https://navigator.service.suptools.hpecorp.net/oidc/callback',
+            HPE_NAV_TLS_REJECT_UNAUTHORIZED: String(
+              config.get<boolean>('tlsRejectUnauthorized') !== false,
+            ),
             HPE_NAV_DOWNLOAD_DIR: config.get<string>('downloadDir') ?? './downloads',
             HPE_NAV_TIMEOUT_MS: String(config.get<number>('timeoutMs') ?? 30000),
             HPE_NAV_DOWNLOAD_TIMEOUT_MS: String(config.get<number>('downloadTimeoutMs') ?? 600000),

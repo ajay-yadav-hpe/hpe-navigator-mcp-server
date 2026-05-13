@@ -32,6 +32,13 @@ describe('navigator_get_related', () => {
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toContain('service unavailable')
   })
+
+  it('uses fallback message when non-Error is thrown', async () => {
+    mockClient.getRelated.mockRejectedValue('raw error')
+    const result = await getRelated(mockClient as any, { product: 'arcus', serial: MOCK_SERIAL })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Failed to get related products')
+  })
 })
 
 // ── navigator_get_feed ────────────────────────────────────────────────────────
@@ -52,6 +59,13 @@ describe('navigator_get_feed', () => {
     mockClient.getFeed.mockRejectedValue(new Error('feed error'))
     const result = await getFeed(mockClient as any, { product: 'arcus', serial: MOCK_SERIAL })
     expect(result.isError).toBe(true)
+  })
+
+  it('uses fallback message when non-Error is thrown', async () => {
+    mockClient.getFeed.mockRejectedValue(null)
+    const result = await getFeed(mockClient as any, { product: 'arcus', serial: MOCK_SERIAL })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Failed to get feed')
   })
 })
 
@@ -81,6 +95,17 @@ describe('navigator_get_heartbeat', () => {
     })
     expect(result.isError).toBe(true)
   })
+
+  it('uses fallback message when non-Error is thrown', async () => {
+    mockClient.getHeartbeat.mockRejectedValue(undefined)
+    const result = await getHeartbeat(mockClient as any, {
+      product: 'arcus',
+      serial: MOCK_SERIAL,
+      heartbeatId: 0,
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Failed to get heartbeat')
+  })
 })
 
 // ── navigator_search_dashboards ───────────────────────────────────────────────
@@ -101,6 +126,13 @@ describe('navigator_search_dashboards', () => {
     mockClient.searchDashboards.mockRejectedValue(new Error('analytics down'))
     const result = await searchDashboards(mockClient as any, { tag: 'arcus' })
     expect(result.isError).toBe(true)
+  })
+
+  it('uses fallback message when non-Error is thrown', async () => {
+    mockClient.searchDashboards.mockRejectedValue('503')
+    const result = await searchDashboards(mockClient as any, { tag: 'arcus' })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Failed to search dashboards')
   })
 })
 
@@ -142,5 +174,15 @@ describe('navigator_download_bundle', () => {
     })
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toContain('file too large')
+  })
+
+  it('uses fallback message when non-Error is thrown', async () => {
+    mockClient.downloadBundle.mockRejectedValue({ code: 'ENOSPACE' })
+    const result = await downloadBundle(mockClient as any, {
+      bucket: 'stats-2026-05',
+      path: 'HPE.ARCUS/CZ2D3J050T/config/config.260509.083010.7790',
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Failed to download bundle')
   })
 })

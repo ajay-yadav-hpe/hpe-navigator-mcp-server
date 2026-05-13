@@ -63,7 +63,20 @@ export class NavigatorClient {
         }
         return res
       } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err))
+        const cause = err instanceof Error ? (err as Error & { cause?: unknown }).cause : undefined
+        const detail = cause instanceof Error ? `: ${cause.message}` : ''
+        const hostname = (() => {
+          try {
+            return new URL(url).hostname
+          } catch {
+            return url
+          }
+        })()
+        lastError = new Error(
+          `Network error reaching ${hostname}${detail}. ` +
+            `Ensure HPE VPN is active. ` +
+            `If certificate errors occur, set HPE_NAV_TLS_REJECT_UNAUTHORIZED=false in extension settings.`,
+        )
         if (attempt < retries - 1) {
           await sleep(1000 * Math.pow(2, attempt))
         }

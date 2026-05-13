@@ -28,6 +28,11 @@ const configSchema = z.object({
   downloadTimeoutMs: z.coerce.number().int().positive().default(600_000),
   downloadDir: z.string().default('./downloads'),
   maxDownloadSizeMb: z.coerce.number().positive().default(500),
+  // Set to false to skip TLS verification (e.g., HPE internal self-signed certs)
+  tlsRejectUnauthorized: z
+    .enum(['true', 'false', ''])
+    .transform((v) => v !== 'false')
+    .default('true'),
 })
 
 export type NavigatorConfig = z.infer<typeof configSchema>
@@ -50,5 +55,6 @@ export function loadConfig(): NavigatorConfig {
     downloadTimeoutMs: env.HPE_NAV_DOWNLOAD_TIMEOUT_MS,
     downloadDir: env.HPE_NAV_DOWNLOAD_DIR,
     maxDownloadSizeMb: env.HPE_NAV_MAX_DOWNLOAD_SIZE_MB,
+    tlsRejectUnauthorized: env.HPE_NAV_TLS_REJECT_UNAUTHORIZED ?? 'true',
   })
 }

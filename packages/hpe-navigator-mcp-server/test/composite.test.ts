@@ -92,6 +92,20 @@ describe('navigator_get_dscvm_logs', () => {
     expect(parsed.results[0].downloaded).toBeDefined()
   })
 
+  it('handles download=true with empty bundle list (no downloads attempted)', async () => {
+    mockNavClient.listBundles.mockResolvedValue({ data: [] })
+    const result = await getDscvmLogs(mockNavClient as any, mockExtClient as any, {
+      serial: MOCK_DSC_SERIAL,
+      date: '2026-05-13',
+      download: true,
+      includeComplog: false,
+    })
+    expect(result.isError).toBeUndefined()
+    const parsed = JSON.parse(result.content[0].text)
+    expect(parsed.results[0].bundles).toHaveLength(0)
+    expect(parsed.results[0].downloaded).toBeUndefined()
+  })
+
   it('returns error on failure', async () => {
     mockNavClient.listBundles.mockRejectedValue(new Error('network error'))
     const result = await getDscvmLogs(mockNavClient as any, mockExtClient as any, {

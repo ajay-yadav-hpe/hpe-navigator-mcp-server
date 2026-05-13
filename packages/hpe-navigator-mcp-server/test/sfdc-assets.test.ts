@@ -28,4 +28,11 @@ describe('navigator_get_sfdc_asset', () => {
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toContain('404')
   })
+
+  it('uses fallback message when non-Error is thrown', async () => {
+    mockClient.getSfdcAsset.mockRejectedValue('service down')
+    const result = await getSfdcAsset(mockClient as any, { serial: 'X' })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toBe('Error: Failed to get SFDC asset')
+  })
 })

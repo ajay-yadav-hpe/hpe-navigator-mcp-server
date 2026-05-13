@@ -68,7 +68,10 @@ describe('ExtractionClient', () => {
     })
 
     const client = new ExtractionClient(baseConfig)
-    const result = await client.downloadBundle('stats-2026-05', 'HPE.ARCUS/CZ2D3J050T/config/file.cfg')
+    const result = await client.downloadBundle(
+      'stats-2026-05',
+      'HPE.ARCUS/CZ2D3J050T/config/file.cfg',
+    )
     expect(result.size).toBe(1310414)
     expect(result.localPath).toContain('file.cfg')
   })
@@ -95,9 +98,9 @@ describe('ExtractionClient', () => {
       headers: { get: () => null },
     })
     const client = new ExtractionClient(baseConfig)
-    await expect(
-      client.downloadBundle('bucket', 'path/to/file.cfg'),
-    ).rejects.toThrow('Download failed: 404')
+    await expect(client.downloadBundle('bucket', 'path/to/file.cfg')).rejects.toThrow(
+      'Download failed: 404',
+    )
   })
 
   it('throws when file exceeds size limit', async () => {
@@ -110,6 +113,20 @@ describe('ExtractionClient', () => {
     })
     const client = new ExtractionClient(baseConfig)
     await expect(client.downloadBundle('bucket', 'huge-file')).rejects.toThrow('File too large')
+  })
+
+  it('throws when response body is null', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: { get: () => '100' },
+      body: null,
+    })
+    const client = new ExtractionClient(baseConfig)
+    await expect(client.downloadBundle('bucket', 'path/file.cfg')).rejects.toThrow(
+      'Response body is empty',
+    )
   })
 
   it('rejects path traversal attempts', async () => {

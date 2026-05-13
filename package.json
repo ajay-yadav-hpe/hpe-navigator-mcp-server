@@ -5,13 +5,15 @@
   "description": "HPE Navigator MCP Server monorepo",
   "scripts": {
     "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "test": "pnpm -r test",
     "test:coverage": "pnpm -r test:coverage",
     "audit": "pnpm audit --audit-level=moderate",
-    "clean": "pnpm -r clean"
+    "clean": "pnpm -r clean",
+    "ci": "pnpm typecheck && pnpm format && pnpm lint && pnpm test:coverage && pnpm build && pnpm audit --audit-level=high"
   },
   "devDependencies": {
     "prettier": "^3.3.0"

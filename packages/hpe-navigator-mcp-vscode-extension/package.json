@@ -85,6 +85,11 @@
           "type": "string",
           "default": "https://navigator.service.suptools.hpecorp.net/oidc/callback",
           "description": "Okta redirect URI registered in the Okta application. The Navigator OIDC callback relays the CXO token back to the MCP server via the state parameter."
+        },
+        "hpeNavigator.tlsRejectUnauthorized": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Set to `false` if HPE internal TLS certificates cause `fetch failed` errors. Disables certificate verification — only use on trusted HPE networks."
         }
       }
     }
