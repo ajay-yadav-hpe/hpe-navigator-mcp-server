@@ -31,7 +31,6 @@ hpe-navigator-mcp-server
 
 See the [root README](../../README.md) for full tool documentation.
 
-
 ## Troubleshooting
 
 ### `Error: fetch failed` / `Network error reaching web.service.cxo.suptools.hpecorp.net`
