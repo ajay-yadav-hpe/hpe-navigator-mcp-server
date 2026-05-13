@@ -1,4 +1,16 @@
-# HPE Navigator MCP Server
+<p align="center">
+  <img src="logo.png" alt="HPE Navigator MCP" width="300" height="150" />
+</p>
+
+<h1 align="center">HPE Navigator MCP Server</h1>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" />
+  <img src="https://img.shields.io/badge/node-%3E%3D20-green.svg" alt="Node.js >= 20" />
+  <img src="https://img.shields.io/badge/MCP-compatible-purple.svg" alt="MCP Compatible" />
+  <img src="https://img.shields.io/badge/tools-12-orange.svg" alt="12 Tools" />
+  <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6.svg" alt="TypeScript" />
+</p>
 
 A **Model Context Protocol (MCP) server** that enables AI assistants (Claude, GitHub Copilot, etc.) to interact with **HPE Navigator** — HPE's internal support operations platform for storage hardware triage.
 

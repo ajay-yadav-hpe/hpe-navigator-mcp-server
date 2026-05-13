@@ -11,7 +11,7 @@
     "url": "https://github.com/ajay-yadav-hpe/hpe-navigator-mcp-server.git"
   },
   "engines": {
-    "vscode": "^1.96.0"
+    "vscode": "^1.99.0"
   },
   "categories": [
     "AI",
@@ -22,6 +22,12 @@
   ],
   "main": "dist/extension.js",
   "contributes": {
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "hpe-navigator",
+        "label": "HPE Navigator"
+      }
+    ],
     "configuration": {
       "title": "HPE Navigator MCP",
       "properties": {
@@ -79,19 +85,21 @@
     }
   },
   "scripts": {
-    "build": "tsup",
+    "build": "node build.cjs",
     "lint": "eslint src/",
     "clean": "rm -rf dist",
-    "package": "vsce package --no-dependencies",
+    "package": "node build.cjs && npx @vscode/vsce package --no-dependencies",
+    "typecheck": "tsc --noEmit",
     "test": "echo 'no tests'"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
-    "@types/vscode": "^1.96.0",
+    "@types/vscode": "^1.99.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.21.0",
     "eslint": "^9.0.0",
-    "tsup": "^8.3.0",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.59.3"
   }

@@ -12,3 +12,4 @@ downloads/
 *.md
 !README.md
 !CHANGELOG.md
+.husky/

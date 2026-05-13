@@ -1,60 +1,49 @@
 import * as vscode from 'vscode'
-import { join } from 'node:path'
 
 export function activate(context: vscode.ExtensionContext) {
-  const config = vscode.workspace.getConfiguration('hpeNavigator')
-  const enabled = config.get<boolean>('enabled', true)
+  const serverPath = vscode.Uri.joinPath(context.extensionUri, 'dist', 'server', 'index.js').fsPath
 
-  if (!enabled) {
-    return
-  }
-
-  const serverPath = join(
-    context.extensionPath,
-    '..',
-    'hpe-navigator-mcp-server',
-    'dist',
-    'index.js',
+  // REQUIRED: emitter so VS Code refreshes the MCP panel when settings change
+  const emitter = new vscode.EventEmitter<void>()
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('hpeNavigator')) emitter.fire()
+    }),
   )
 
-  const env: Record<string, string> = {}
-  const username = config.get<string>('username', '')
-  const password = config.get<string>('password', '')
-  const serviceToken = config.get<string>('serviceToken', '')
-  const cxoBaseUrl = config.get<string>('cxoBaseUrl', '')
-  const extractionBaseUrl = config.get<string>('extractionBaseUrl', '')
-  const downloadDir = config.get<string>('downloadDir', '')
-  const timeoutMs = config.get<number>('timeoutMs', 30000)
-  const downloadTimeoutMs = config.get<number>('downloadTimeoutMs', 600000)
-  const maxDownloadSizeMb = config.get<number>('maxDownloadSizeMb', 500)
-
-  if (username) env.HPE_NAV_USERNAME = username
-  if (password) env.HPE_NAV_PASSWORD = password
-  if (serviceToken) env.HPE_NAV_SERVICE_TOKEN = serviceToken
-  if (cxoBaseUrl) env.HPE_NAV_CXO_BASE_URL = cxoBaseUrl
-  if (extractionBaseUrl) env.HPE_NAV_EXTRACTION_BASE_URL = extractionBaseUrl
-  if (downloadDir) env.HPE_NAV_DOWNLOAD_DIR = downloadDir
-  if (timeoutMs) env.HPE_NAV_TIMEOUT_MS = String(timeoutMs)
-  if (downloadTimeoutMs) env.HPE_NAV_DOWNLOAD_TIMEOUT_MS = String(downloadTimeoutMs)
-  if (maxDownloadSizeMb) env.HPE_NAV_MAX_DOWNLOAD_SIZE_MB = String(maxDownloadSizeMb)
-
-  const serverDefinition: vscode.McpStdioServerDefinition = {
-    type: 'stdio',
-    label: 'HPE Navigator',
-    command: 'node',
-    args: [serverPath],
-    env,
-  }
-
   const disposable = vscode.lm.registerMcpServerDefinitionProvider('hpe-navigator', {
-    provideMcpServerDefinitions(): vscode.McpServerDefinition[] {
-      return [serverDefinition]
+    onDidChangeMcpServerDefinitions: emitter.event,
+    provideMcpServerDefinitions(_token: vscode.CancellationToken) {
+      const config = vscode.workspace.getConfiguration('hpeNavigator')
+
+      // ALWAYS return the server — NEVER return [] based on config state
+      // Let the server itself handle missing config with a clear error message
+      return [
+        new vscode.McpStdioServerDefinition(
+          'HPE Navigator',
+          process.execPath,
+          [serverPath],
+          {
+            HPE_NAV_USERNAME: config.get<string>('username') ?? '',
+            HPE_NAV_PASSWORD: config.get<string>('password') ?? '',
+            HPE_NAV_SERVICE_TOKEN: config.get<string>('serviceToken') ?? '',
+            HPE_NAV_CXO_BASE_URL:
+              config.get<string>('cxoBaseUrl') ?? 'https://web.service.cxo.suptools.hpecorp.net',
+            HPE_NAV_EXTRACTION_BASE_URL:
+              config.get<string>('extractionBaseUrl') ??
+              'https://extraction.service.cxo.suptools.hpecorp.net',
+            HPE_NAV_DOWNLOAD_DIR: config.get<string>('downloadDir') ?? './downloads',
+            HPE_NAV_TIMEOUT_MS: String(config.get<number>('timeoutMs') ?? 30000),
+            HPE_NAV_DOWNLOAD_TIMEOUT_MS: String(config.get<number>('downloadTimeoutMs') ?? 600000),
+            HPE_NAV_MAX_DOWNLOAD_SIZE_MB: String(config.get<number>('maxDownloadSizeMb') ?? 500),
+          },
+          '1.0.0',
+        ),
+      ]
     },
   })
 
   context.subscriptions.push(disposable)
 }
 
-export function deactivate() {
-  // cleanup handled by disposables
-}
+export function deactivate() {}

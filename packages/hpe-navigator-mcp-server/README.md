@@ -1,4 +1,14 @@
-# hpe-navigator-mcp-server
+<p align="center">
+  <img src="../../logo.svg" alt="HPE Navigator MCP" width="96" height="96" />
+</p>
+
+<h1 align="center">hpe-navigator-mcp-server</h1>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" />
+  <img src="https://img.shields.io/badge/MCP-compatible-purple.svg" alt="MCP Compatible" />
+  <img src="https://img.shields.io/badge/tools-12-orange.svg" alt="12 Tools" />
+</p>
 
 MCP server package for HPE Navigator. Exposes 12 tools for hardware serial lookup, system health monitoring, SFDC asset management, telemetry bundle retrieval, and analytics dashboard discovery.
 
