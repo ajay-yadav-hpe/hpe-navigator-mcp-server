@@ -1,0 +1,252 @@
+import type { NavigatorConfig } from '../config.js'
+import { AuthManager } from './auth.js'
+
+export class NavigatorClient {
+  private auth: AuthManager
+  private baseUrl: string
+  private timeoutMs: number
+
+  constructor(config: NavigatorConfig) {
+    this.auth = new AuthManager(config)
+    this.baseUrl = config.cxoBaseUrl
+    this.timeoutMs = config.timeoutMs
+  }
+
+  async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const token = await this.auth.getToken()
+    const url = `${this.baseUrl}${path}`
+
+    const res = await this.fetchWithRetry(url, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      signal: AbortSignal.timeout(this.timeoutMs),
+    })
+
+    if (res.status === 401) {
+      this.auth.clearToken()
+      const newToken = await this.auth.getToken()
+      const retryRes = await fetch(url, {
+        ...options,
+        headers: {
+          Authorization: `Bearer ${newToken}`,
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+        signal: AbortSignal.timeout(this.timeoutMs),
+      })
+      if (!retryRes.ok) {
+        throw new Error(`API error: ${retryRes.status} ${retryRes.statusText}`)
+      }
+      return retryRes.json() as Promise<T>
+    }
+
+    if (!res.ok) {
+      throw new Error(`API error: ${res.status} ${res.statusText}`)
+    }
+
+    return res.json() as Promise<T>
+  }
+
+  private async fetchWithRetry(url: string, init: RequestInit, retries = 3): Promise<Response> {
+    let lastError: Error | undefined
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        const res = await fetch(url, init)
+        if (res.status === 429) {
+          const retryAfter = parseInt(res.headers.get('retry-after') ?? '2', 10)
+          await sleep(retryAfter * 1000 * (attempt + 1))
+          continue
+        }
+        return res
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err))
+        if (attempt < retries - 1) {
+          await sleep(1000 * Math.pow(2, attempt))
+        }
+      }
+    }
+    throw lastError ?? new Error('Request failed after retries')
+  }
+
+  async findSerial(serial: string) {
+    return this.request<{ data: FindResult[]; total: number }>(
+      `/nav/v1/find/${encodeURIComponent(serial)}`,
+    )
+  }
+
+  async getRelated(product: string, serial: string) {
+    return this.request<{ data: RelatedProducts }>(
+      `/nav/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/related`,
+    )
+  }
+
+  async getSfdcAsset(serial: string) {
+    return this.request<{ data: SfdcAsset }>(`/nav/v1/sfdc/${encodeURIComponent(serial)}/asset`)
+  }
+
+  async getFeed(product: string, serial: string) {
+    return this.request<{ data: FeedAlert[] }>(
+      `/nav/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/feed`,
+    )
+  }
+
+  async getOverview(product: string, serial: string) {
+    return this.request<{ data: SystemOverview }>(
+      `/nav/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/overview`,
+    )
+  }
+
+  async getHeartbeat(product: string, serial: string, heartbeatId: number) {
+    return this.request<{ data: Record<string, unknown> }>(
+      `/nav/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/heartbeat/${heartbeatId}`,
+    )
+  }
+
+  async listFiletypes(product: string) {
+    return this.request<{ data: FileType[] }>(`/nav/v1/${encodeURIComponent(product)}/filetypes`)
+  }
+
+  async listBundles(
+    product: string,
+    serial: string,
+    fromTs: string,
+    toTs: string,
+    type?: string,
+    latest?: boolean,
+  ) {
+    const params = new URLSearchParams({ from: fromTs, to: toTs })
+    if (type) params.set('type', type)
+    if (latest) params.set('latest', 'true')
+    return this.request<{ data: Bundle[] }>(
+      `/nav/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/bundles?${params}`,
+    )
+  }
+
+  async searchDashboards(tag: string) {
+    return this.request<Dashboard[]>(`/nav/v1/analytics/dashboards?tag=${encodeURIComponent(tag)}`)
+  }
+}
+
+export interface FindResult {
+  matching_serial: string
+  serial: string
+  product: string
+  model: string
+  customer: string | null
+  status: string
+  component: string | null
+}
+
+export interface RelatedProducts {
+  solution: string
+  related_products: Array<{
+    serial: string
+    category: string
+    product: string
+  }>
+}
+
+export interface SfdcAsset {
+  asset_id: string
+  serial: string
+  status: string
+  install_date: string | null
+  ship_date: string | null
+  product: string
+  product_family: string
+  product_description: string
+  product_code: string
+  sla: string
+  hpe_sla: string
+  support_end_date: string | null
+  support_term_remaining_days: number | null
+  is_escalated: boolean
+  account: { name: string; country: string }
+  contact: { email: string; name: string }
+  open_cases: SfdcCase[]
+  closed_cases: SfdcCase[]
+  escalations: Escalation[]
+}
+
+export interface SfdcCase {
+  case_number: string
+  subject: string
+  status: string
+  priority: string
+  severity: string
+  created_date: string
+  escalation: {
+    first_eng_esc_jira: string | null
+    max_eng_esc_pri: string | null
+  }
+}
+
+export interface Escalation {
+  case_number: string
+  jira_id: string
+  priority: string
+  jira_link: string
+  targets: string[]
+}
+
+export interface FeedAlert {
+  category: string
+  severity: 'critical' | 'warning' | 'info'
+  message: string
+}
+
+export interface SystemOverview {
+  latest_heartbeat_ts: string
+  latest_heartbeat_id: number
+  rda_status: string
+  display_name: string
+  version: { os: string; upgrade_tool: string }
+  system_model: string
+  node_count: number
+  pd_count: number
+  cage_count: number
+  node_issue: boolean
+  pd_issue: boolean
+  ps_issue: boolean
+  env_issue: boolean
+  maintenance_mode: boolean
+  space: {
+    total: number
+    free: number
+    raw_space_capacity_percent: number
+  }
+}
+
+export interface Bundle {
+  filedatetime: string
+  scalitydatetime?: string
+  type: string
+  path: string
+  bucket: string
+  size: number
+  metadata_hash?: string
+}
+
+export interface FileType {
+  filetype: string
+  indexed: boolean
+  single: boolean
+}
+
+export interface Dashboard {
+  id: number
+  uid: string
+  title: string
+  url: string
+  tags: string[]
+  folderTitle: string
+  folderUrl?: string
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}

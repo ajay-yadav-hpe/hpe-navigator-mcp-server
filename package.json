@@ -1,0 +1,26 @@
+{
+  "name": "hpe-navigator-mcp",
+  "private": true,
+  "version": "0.0.0",
+  "description": "HPE Navigator MCP Server monorepo",
+  "scripts": {
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "test": "pnpm -r test",
+    "test:coverage": "pnpm -r test:coverage",
+    "audit": "pnpm audit --audit-level=moderate",
+    "clean": "pnpm -r clean",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.0",
+    "prettier": "^3.3.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.12.0"
+}

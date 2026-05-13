@@ -1,0 +1,98 @@
+{
+  "name": "hpe-navigator-mcp-vscode-extension",
+  "displayName": "HPE Navigator MCP",
+  "description": "VS Code extension that registers the HPE Navigator MCP server for AI-powered hardware support triage",
+  "version": "1.0.0",
+  "publisher": "ajay-yadav-hpe",
+  "license": "MIT",
+  "icon": "logo.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ajay-yadav-hpe/hpe-navigator-mcp-server.git"
+  },
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "dist/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "HPE Navigator MCP",
+      "properties": {
+        "hpeNavigator.username": {
+          "type": "string",
+          "default": "",
+          "description": "HPE email address for authentication (e.g., user@hpe.com)"
+        },
+        "hpeNavigator.password": {
+          "type": "string",
+          "default": "",
+          "description": "HPE password for headless authentication (Method 1)"
+        },
+        "hpeNavigator.serviceToken": {
+          "type": "string",
+          "default": "",
+          "description": "Pre-obtained CXO service JWT (bypasses all login flows)"
+        },
+        "hpeNavigator.cxoBaseUrl": {
+          "type": "string",
+          "default": "https://web.service.cxo.suptools.hpecorp.net",
+          "description": "CXO backend base URL"
+        },
+        "hpeNavigator.extractionBaseUrl": {
+          "type": "string",
+          "default": "https://extraction.service.cxo.suptools.hpecorp.net",
+          "description": "Extraction service base URL"
+        },
+        "hpeNavigator.downloadDir": {
+          "type": "string",
+          "default": "./downloads",
+          "description": "Directory for downloaded telemetry bundles"
+        },
+        "hpeNavigator.timeoutMs": {
+          "type": "number",
+          "default": 30000,
+          "description": "API request timeout in milliseconds"
+        },
+        "hpeNavigator.downloadTimeoutMs": {
+          "type": "number",
+          "default": 600000,
+          "description": "File download timeout in milliseconds (for large bundles)"
+        },
+        "hpeNavigator.maxDownloadSizeMb": {
+          "type": "number",
+          "default": 500,
+          "description": "Maximum download file size limit in MB"
+        },
+        "hpeNavigator.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable the HPE Navigator MCP server"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "lint": "eslint src/",
+    "clean": "rm -rf dist",
+    "package": "vsce package --no-dependencies",
+    "test": "echo 'no tests'"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/vscode": "^1.96.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.59.3"
+  }
+}

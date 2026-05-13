@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.vsix
+.env
+.env.*
+!.env.example
+coverage/
+downloads/
+*.tgz
+.turbo/
+.DS_Store
+*.md
+!README.md
+!CHANGELOG.md
