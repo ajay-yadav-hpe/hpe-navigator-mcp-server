@@ -3,6 +3,19 @@ import type { NavigatorClient } from '../client/navigator-client.js'
 import type { ExtractionClient } from '../client/extraction-client.js'
 import { formatSuccess, formatError } from '../utils/formatter.js'
 
+/**
+ * Maps the product identifier returned by findSerial (e.g., "dsc", "arcus")
+ * to the API path prefix the CXO backend expects for query endpoints.
+ * Products not in this map are passed through as-is.
+ */
+const PRODUCT_API_PATHS: Record<string, string> = {
+  dsc: 'scality/dsc',
+}
+
+function resolveProductPath(product: string): string {
+  return PRODUCT_API_PATHS[product] ?? product
+}
+
 export const getSystemSummarySchema = z.object({
   serial: z.string().describe('Hardware serial number'),
 })
@@ -18,11 +31,11 @@ export async function getSystemSummary(
     }
 
     const product = findResult.data[0]
-    const productType = product.product
+    const productPath = resolveProductPath(product.product)
 
     const [overview, feed, sfdc] = await Promise.allSettled([
-      navClient.getOverview(productType, params.serial),
-      navClient.getFeed(productType, params.serial),
+      navClient.getOverview(productPath, params.serial),
+      navClient.getFeed(productPath, params.serial),
       navClient.getSfdcAsset(params.serial),
     ])
 
@@ -81,7 +94,13 @@ export async function getDscvmLogs(
     }> = []
 
     for (const type of types) {
-      const bundleResult = await navClient.listBundles('dsc', params.serial, fromTs, toTs, type)
+      const bundleResult = await navClient.listBundles(
+        'scality/dsc',
+        params.serial,
+        fromTs,
+        toTs,
+        type,
+      )
       const entry: (typeof results)[number] = { type, bundles: bundleResult.data }
 
       if (params.download && bundleResult.data.length > 0) {
