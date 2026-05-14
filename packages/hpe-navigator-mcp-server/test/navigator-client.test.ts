@@ -67,8 +67,9 @@ describe('NavigatorClient', () => {
     const result = await client.findSerial(MOCK_SERIAL)
     expect(result.data[0].product).toBe('arcus')
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining(`/nav/v1/find/${MOCK_SERIAL}`),
+      expect.stringContaining(`/query/v1/find`),
       expect.objectContaining({
+        method: 'POST',
         headers: expect.objectContaining({ Authorization: expect.stringContaining('Bearer') }),
       }),
     )

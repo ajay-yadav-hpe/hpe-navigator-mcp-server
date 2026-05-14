@@ -27,6 +27,7 @@ function mockFetchRes(data: unknown, ok = true, status = 200): Response {
     status,
     statusText: ok ? 'OK' : 'Error',
     json: () => Promise.resolve(data),
+    text: () => Promise.resolve(JSON.stringify(data)),
   } as unknown as Response
 }
 

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.png" alt="HPE Navigator MCP" width="300" height="150" />
+  <img src="logo.png" alt="HPE Navigator MCP" width="300" height="300" />
 </p>
 
 <h1 align="center">HPE Navigator MCP — VS Code Extension</h1>
@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" />
 </p>
 
-Registers the HPE Navigator MCP server with VS Code's GitHub Copilot integration via `mcpServerDefinitionProviders`.
+Registers the HPE Navigator MCP server with VS Code's GitHub Copilot.
 
 ## Configuration
 

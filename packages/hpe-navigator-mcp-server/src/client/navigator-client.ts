@@ -86,41 +86,42 @@ export class NavigatorClient {
   }
 
   async findSerial(serial: string) {
-    return this.request<{ data: FindResult[]; total: number }>(
-      `/nav/v1/find/${encodeURIComponent(serial)}`,
-    )
+    return this.request<{ data: FindResult[]; total: number }>(`/query/v1/find`, {
+      method: 'POST',
+      body: JSON.stringify({ serial }),
+    })
   }
 
   async getRelated(product: string, serial: string) {
     return this.request<{ data: RelatedProducts }>(
-      `/nav/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/related`,
+      `/query/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/related`,
     )
   }
 
   async getSfdcAsset(serial: string) {
-    return this.request<{ data: SfdcAsset }>(`/nav/v1/sfdc/${encodeURIComponent(serial)}/asset`)
+    return this.request<{ data: SfdcAsset }>(`/query/v1/sfdc/assets/${encodeURIComponent(serial)}`)
   }
 
   async getFeed(product: string, serial: string) {
     return this.request<{ data: FeedAlert[] }>(
-      `/nav/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/feed`,
+      `/query/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/feed`,
     )
   }
 
   async getOverview(product: string, serial: string) {
     return this.request<{ data: SystemOverview }>(
-      `/nav/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/overview`,
+      `/query/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/overview`,
     )
   }
 
   async getHeartbeat(product: string, serial: string, heartbeatId: number) {
     return this.request<{ data: Record<string, unknown> }>(
-      `/nav/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/heartbeat/${heartbeatId}`,
+      `/query/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/heartbeat/${heartbeatId}`,
     )
   }
 
   async listFiletypes(product: string) {
-    return this.request<{ data: FileType[] }>(`/nav/v1/${encodeURIComponent(product)}/filetypes`)
+    return this.request<{ data: FileType[] }>(`/query/v1/${encodeURIComponent(product)}/filetypes`)
   }
 
   async listBundles(
@@ -135,12 +136,14 @@ export class NavigatorClient {
     if (type) params.set('type', type)
     if (latest) params.set('latest', 'true')
     return this.request<{ data: Bundle[] }>(
-      `/nav/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/bundles?${params}`,
+      `/query/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/bundles?${params}`,
     )
   }
 
   async searchDashboards(tag: string) {
-    return this.request<Dashboard[]>(`/nav/v1/analytics/dashboards?tag=${encodeURIComponent(tag)}`)
+    return this.request<Dashboard[]>(
+      `/query/v1/analytics/dashboards?tag=${encodeURIComponent(tag)}`,
+    )
   }
 }
 
@@ -165,24 +168,34 @@ export interface RelatedProducts {
 
 export interface SfdcAsset {
   asset_id: string
+  name?: string
   serial: string
   status: string
   install_date: string | null
   ship_date: string | null
+  return_date?: string | null
+  purchase_date?: string | null
+  order_type?: string
   product: string
   product_family: string
+  program?: string
+  asset_type?: string
+  product_name?: string
   product_description: string
   product_code: string
   sla: string
   hpe_sla: string
+  support_start_date?: string | null
   support_end_date: string | null
+  end_of_support_date?: string | null
   support_term_remaining_days: number | null
   is_escalated: boolean
-  account: { name: string; country: string }
-  contact: { email: string; name: string }
+  account: Record<string, unknown>
+  contact: Record<string, unknown>
   open_cases: SfdcCase[]
   closed_cases: SfdcCase[]
   escalations: Escalation[]
+  [key: string]: unknown
 }
 
 export interface SfdcCase {
@@ -213,25 +226,31 @@ export interface FeedAlert {
 }
 
 export interface SystemOverview {
-  latest_heartbeat_ts: string
-  latest_heartbeat_id: number
-  rda_status: string
-  display_name: string
-  version: { os: string; upgrade_tool: string }
-  system_model: string
-  node_count: number
-  pd_count: number
-  cage_count: number
-  node_issue: boolean
-  pd_issue: boolean
-  ps_issue: boolean
-  env_issue: boolean
-  maintenance_mode: boolean
-  space: {
+  filedatetime?: string
+  product?: string
+  persona?: string
+  platform?: string
+  model?: string
+  state?: string
+  status?: string
+  hostname?: string
+  connection_state?: string
+  software_version?: string
+  infosight_enabled?: boolean
+  display_name?: string
+  version?: { os: string; upgrade_tool: string }
+  system_model?: string
+  node_count?: number
+  pd_count?: number
+  cage_count?: number
+  maintenance_mode?: boolean
+  space?: {
     total: number
     free: number
     raw_space_capacity_percent: number
   }
+  rda_info?: Record<string, unknown>
+  [key: string]: unknown
 }
 
 export interface Bundle {

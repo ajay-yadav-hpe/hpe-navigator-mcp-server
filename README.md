@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.png" alt="HPE Navigator MCP" width="300" height="150" />
+  <img src="logo.png" alt="HPE Navigator MCP" width="300" height="300" />
 </p>
 
 <h1 align="center">HPE Navigator MCP Server</h1>
