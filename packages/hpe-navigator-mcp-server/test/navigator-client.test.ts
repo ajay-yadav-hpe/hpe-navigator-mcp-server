@@ -111,7 +111,7 @@ describe('NavigatorClient', () => {
     expect(result.data).toHaveLength(4)
   })
 
-  it('listBundles returns bundles for date range', async () => {
+  it('listBundles passes from_ts and to_ts params', async () => {
     fetchMock.mockResolvedValue(mockRes(bundlesResponse))
     const result = await client.listBundles(
       'arcus',
@@ -121,6 +121,9 @@ describe('NavigatorClient', () => {
       'config',
       false,
     )
+    const url = fetchMock.mock.calls[0][0] as string
+    expect(url).toContain('from_ts=')
+    expect(url).toContain('to_ts=')
     expect(result.data[0].type).toBe('config')
   })
 

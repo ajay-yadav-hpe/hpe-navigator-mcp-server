@@ -94,7 +94,7 @@ export class NavigatorClient {
 
   async getRelated(product: string, serial: string) {
     return this.request<{ data: RelatedProducts }>(
-      `/query/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/related`,
+      `/query/v1/${product}/${encodeURIComponent(serial)}/related`,
     )
   }
 
@@ -104,24 +104,24 @@ export class NavigatorClient {
 
   async getFeed(product: string, serial: string) {
     return this.request<{ data: FeedAlert[] }>(
-      `/query/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/feed`,
+      `/query/v1/${product}/${encodeURIComponent(serial)}/feed`,
     )
   }
 
   async getOverview(product: string, serial: string) {
     return this.request<{ data: SystemOverview }>(
-      `/query/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/overview`,
+      `/query/v1/${product}/${encodeURIComponent(serial)}/overview`,
     )
   }
 
   async getHeartbeat(product: string, serial: string, heartbeatId: number) {
     return this.request<{ data: Record<string, unknown> }>(
-      `/query/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/heartbeat/${heartbeatId}`,
+      `/query/v1/${product}/${encodeURIComponent(serial)}/heartbeat/${heartbeatId}`,
     )
   }
 
   async listFiletypes(product: string) {
-    return this.request<{ data: FileType[] }>(`/query/v1/${encodeURIComponent(product)}/filetypes`)
+    return this.request<{ data: FileType[] }>(`/query/v1/${product}/filetypes`)
   }
 
   async listBundles(
@@ -132,11 +132,11 @@ export class NavigatorClient {
     type?: string,
     latest?: boolean,
   ) {
-    const params = new URLSearchParams({ from: fromTs, to: toTs })
+    const params = new URLSearchParams({ from_ts: fromTs, to_ts: toTs })
     if (type) params.set('type', type)
-    if (latest) params.set('latest', 'true')
+    if (latest !== undefined) params.set('latest', String(latest))
     return this.request<{ data: Bundle[] }>(
-      `/query/v1/${encodeURIComponent(product)}/${encodeURIComponent(serial)}/bundles?${params}`,
+      `/query/v1/${product}/${encodeURIComponent(serial)}/bundles?${params}`,
     )
   }
 

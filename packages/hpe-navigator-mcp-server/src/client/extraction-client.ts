@@ -27,7 +27,7 @@ export class ExtractionClient {
   ): Promise<{ localPath: string; size: number }> {
     const token = await this.auth.getToken()
 
-    const url = `${this.baseUrl}/extraction/v1/download?bucket=${encodeURIComponent(bucket)}&path=${encodeURIComponent(path)}`
+    const url = `${this.baseUrl}/v1/get/${encodeURIComponent(bucket)}/${path}`
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(this.downloadTimeoutMs),

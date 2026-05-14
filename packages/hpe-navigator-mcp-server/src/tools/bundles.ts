@@ -3,7 +3,12 @@ import type { NavigatorClient } from '../client/navigator-client.js'
 import { formatSuccess, formatError } from '../utils/formatter.js'
 
 export const listFiletypesSchema = z.object({
-  product: z.string().describe("Product type (e.g., 'arcus', 'dsc')"),
+  product: z
+    .string()
+    .describe(
+      "Product API path for filetypes. Examples: 'arcus', 'scality/index/dsc'. " +
+        "For DSC products use 'scality/index/dsc'. Use the find tool first to identify the product.",
+    ),
 })
 
 export async function listFiletypes(
@@ -19,14 +24,21 @@ export async function listFiletypes(
 }
 
 export const listBundlesSchema = z.object({
-  product: z.string().describe("Product type (e.g., 'arcus', 'dsc')"),
+  product: z
+    .string()
+    .describe(
+      "Product API path for bundles. Examples: 'arcus', 'scality/dsc'. " +
+        "For DSC products use 'scality/dsc'. Use the find tool first to identify the product.",
+    ),
   serial: z.string().describe('Hardware serial number'),
   fromTs: z.string().describe("Start datetime ISO 8601 (e.g., '2026-05-08T00:00:00.000Z')"),
   toTs: z.string().describe("End datetime ISO 8601 (e.g., '2026-05-13T23:59:59.000Z')"),
   type: z
     .string()
     .optional()
-    .describe("Filter by file type (e.g., 'config', 'dailylog', 'insplore', 'heartbeat')"),
+    .describe(
+      "Filter by file type (e.g., 'dailylog', 'dailyahs', 'config', 'complog', 'demandahs')",
+    ),
   latest: z.boolean().optional().default(false).describe('Return only the latest bundle'),
 })
 

@@ -3,7 +3,7 @@ import type { NavigatorClient } from '../client/navigator-client.js'
 import { formatSuccess, formatError } from '../utils/formatter.js'
 
 export const getFeedSchema = z.object({
-  product: z.string().describe("Product type (e.g., 'arcus')"),
+  product: z.string().describe("Product API path (e.g., 'arcus', 'scality/dsc')"),
   serial: z.string().describe('Hardware serial number'),
 })
 

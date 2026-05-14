@@ -74,6 +74,10 @@ describe('ExtractionClient', () => {
     )
     expect(result.size).toBe(1310414)
     expect(result.localPath).toContain('file.cfg')
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/v1/get/stats-2026-05/HPE.ARCUS/CZ2D3J050T/config/file.cfg'),
+      expect.any(Object),
+    )
   })
 
   it('uses custom outputFilename', async () => {
