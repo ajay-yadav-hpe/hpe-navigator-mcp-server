@@ -2,7 +2,7 @@
   "name": "hpe-navigator-mcp-server",
   "displayName": "HPE Navigator MCP",
   "description": "VS Code extension that registers the HPE Navigator MCP server for AI-powered hardware support triage",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "ajay-yadav-hpe",
   "license": "MIT",
   "icon": "logo.png",

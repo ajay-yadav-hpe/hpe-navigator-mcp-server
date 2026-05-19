@@ -1,9 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { randomBytes, createHash } from 'node:crypto'
 import type { NavigatorConfig } from '../config.js'
 import { TokenCache } from '../utils/token-cache.js'
 
-type CallbackResult = { code: string }
+type TokenRelayResult = { token: string }
 
 export class AuthManager {
   private tokenCache: TokenCache
@@ -63,38 +62,29 @@ export class AuthManager {
 
   /* v8 ignore start */
   private async loginWithOkta(): Promise<string> {
-    const { codeVerifier, codeChallenge } = generatePKCE()
-    const state = randomBytes(16).toString('hex')
-    const { port, resultPromise, server } = await startCallbackServer(state)
-    const localCallbackUri = `http://localhost:${port}/callback`
-
-    // Use localhost directly as the OIDC redirect URI.
-    // This is the standard pattern for native/CLI OIDC clients using PKCE.
-    // Okta redirects the browser straight to our local server with the auth code.
-    const redirectUri = localCallbackUri
-
-    const authorizeUrl = new URL(this.config.oktaAuthorizeUrl)
-    authorizeUrl.searchParams.set('client_id', this.config.oktaClientId)
-    authorizeUrl.searchParams.set('response_type', 'code')
-    authorizeUrl.searchParams.set('scope', 'openid profile email')
-    authorizeUrl.searchParams.set('redirect_uri', redirectUri)
-    authorizeUrl.searchParams.set('state', state)
-    authorizeUrl.searchParams.set('code_challenge', codeChallenge)
-    authorizeUrl.searchParams.set('code_challenge_method', 'S256')
+    const { port, resultPromise, server } = await startTokenRelayServer()
+    const navigatorUrl = 'https://navigator.service.suptools.hpecorp.net'
 
     console.error(`\n═══════════════════════════════════════════════════════════`)
-    console.error(`  HPE Navigator — Okta Authentication Required`)
+    console.error(`  HPE Navigator — Okta Authentication`)
     console.error(`═══════════════════════════════════════════════════════════`)
-    console.error(`  Waiting for Okta login (port ${port})...`)
-    console.error(`  Opening browser...`)
-    console.error(`  If browser does not open, visit:`)
-    console.error(`  ${authorizeUrl.toString()}`)
+    console.error(`  1. Browser will open Navigator (Okta login required)`)
+    console.error(`  2. Complete Okta authentication in the browser`)
+    console.error(`  3. A helper page will open to relay the token`)
     console.error(`═══════════════════════════════════════════════════════════\n`)
+
     const open = getOpenCommand()
     const { exec } = await import('node:child_process')
-    exec(`${open} "${authorizeUrl.toString()}"`, (execErr) => {
+    exec(`${open} "${navigatorUrl}"`, (execErr) => {
       if (execErr) console.error(`  Warning: failed to open browser: ${execErr.message}`)
     })
+
+    // Open the token relay helper page after a brief delay
+    setTimeout(() => {
+      exec(`${open} "http://localhost:${port}"`, (execErr) => {
+        if (execErr) console.error(`  Warning: failed to open relay page: ${execErr.message}`)
+      })
+    }, 3000)
 
     const result = await Promise.race([
       resultPromise,
@@ -103,23 +93,17 @@ export class AuthManager {
           () =>
             reject(
               new Error(
-                'Okta login timed out after 3 minutes.\n' +
-                  'Possible causes:\n' +
-                  '  1. The Okta app does not allow http://localhost redirect URIs\n' +
-                  '  2. The browser failed to open or MFA was not completed in time\n' +
-                  'Workaround: Copy the token from Navigator browser DevTools:\n' +
-                  '  Network tab → any /query/ request → Authorization header value\n' +
-                  '  Set it as HPE_NAV_SERVICE_TOKEN in VS Code settings.',
+                'Okta login timed out after 5 minutes.\n' +
+                  'Workaround: Set HPE_NAV_SERVICE_TOKEN in extension settings.\n' +
+                  '  In Navigator, open DevTools → Application → Local Storage → auth key → token value.',
               ),
             ),
-          180_000,
+          300_000,
         ),
       ),
     ]).finally(() => server.close())
 
-    // Exchange the authorization code for an Okta access token (PKCE),
-    // then exchange the Okta token for a CXO token.
-    return this.exchangeCodeForCxoToken(result.code, codeVerifier, redirectUri)
+    return result.token
   }
   /* v8 ignore end */
 
@@ -213,12 +197,6 @@ function wrapFetchError(err: unknown, url: string): Error {
   )
 }
 
-function generatePKCE(): { codeVerifier: string; codeChallenge: string } {
-  const codeVerifier = randomBytes(32).toString('base64url')
-  const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url')
-  return { codeVerifier, codeChallenge }
-}
-
 function getOpenCommand(): string {
   switch (process.platform) {
     case 'darwin':
@@ -230,73 +208,82 @@ function getOpenCommand(): string {
   }
 }
 
-function startCallbackServer(expectedState: string): Promise<{
+function startTokenRelayServer(): Promise<{
   port: number
-  resultPromise: Promise<CallbackResult>
+  resultPromise: Promise<TokenRelayResult>
   server: ReturnType<typeof createServer>
 }> {
   return new Promise((resolve) => {
-    let resolveResult: (r: CallbackResult) => void
-    let rejectResult: (err: Error) => void
-    const resultPromise = new Promise<CallbackResult>((res, rej) => {
+    let resolveResult: (r: TokenRelayResult) => void
+    const resultPromise = new Promise<TokenRelayResult>((res) => {
       resolveResult = res
-      rejectResult = rej
     })
 
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
       const url = new URL(req.url ?? '/', `http://localhost`)
-      console.error(`  [callback] ${req.method} ${url.pathname}${url.search}`)
 
-      if (url.pathname !== '/callback') {
-        res.writeHead(404)
-        res.end('Not found')
+      if (url.pathname === '/callback' && req.method === 'POST') {
+        // Receive token via POST from the relay page
+        let body = ''
+        req.on('data', (chunk: Buffer) => {
+          body += chunk.toString()
+        })
+        req.on('end', () => {
+          try {
+            const data = JSON.parse(body) as { token?: string }
+            if (data.token) {
+              res.writeHead(200, {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+              })
+              res.end(JSON.stringify({ ok: true }))
+              console.error('  ✓ Token received via relay page')
+              resolveResult({ token: data.token })
+            } else {
+              res.writeHead(400, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ error: 'Missing token' }))
+            }
+          } catch {
+            res.writeHead(400, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: 'Invalid JSON' }))
+          }
+        })
         return
       }
 
-      // Check for Okta error responses (e.g., redirect_uri mismatch)
-      const error = url.searchParams.get('error')
-      if (error) {
-        const desc = url.searchParams.get('error_description') ?? error
-        console.error(`  [callback] Okta error: ${desc}`)
-        res.writeHead(400, { 'Content-Type': 'text/html' })
-        res.end(`<html><body><h2>Authentication failed</h2><p>${desc}</p></body></html>`)
-        rejectResult(new Error(`Okta authentication error: ${desc}`))
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204, {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        })
+        res.end()
         return
       }
 
-      // Validate state parameter (CSRF protection)
-      const state = url.searchParams.get('state')
-      if (state !== expectedState) {
-        console.error(`  [callback] State mismatch: expected ${expectedState}, got ${state}`)
-        res.writeHead(400, { 'Content-Type': 'text/html' })
-        res.end(
-          '<html><body><h2>Authentication failed</h2><p>Invalid state parameter.</p></body></html>',
-        )
-        rejectResult(new Error('OIDC state mismatch — possible CSRF'))
-        return
-      }
-
-      // Extract the authorization code
-      const code = url.searchParams.get('code')
-      if (code) {
-        console.error('  [callback] Authorization code received')
+      // Handle bookmarklet redirect: GET /callback?token=...
+      if (url.pathname === '/callback' && req.method === 'GET' && url.searchParams.has('token')) {
+        const token = url.searchParams.get('token')!
         res.writeHead(200, { 'Content-Type': 'text/html' })
         res.end(
-          '<html><body><h2>Authentication successful!</h2><p>You can close this window.</p></body></html>',
+          '<html><body><h2 style="color:#01a982">✓ Token received!</h2><p>You can close this window.</p></body></html>',
         )
-        resolveResult({ code })
+        console.error('  ✓ Token received via bookmarklet')
+        resolveResult({ token })
         return
       }
 
-      console.error('  [callback] Missing code parameter')
-      res.writeHead(400, { 'Content-Type': 'text/html' })
-      res.end(
-        '<html><body><h2>Authentication failed</h2><p>Missing authorization code.</p></body></html>',
-      )
-      rejectResult(new Error('Missing authorization code in callback'))
+      if (url.pathname === '/' && req.method === 'GET') {
+        const port = (server.address() as { port: number })?.port ?? 0
+        res.writeHead(200, { 'Content-Type': 'text/html' })
+        res.end(getTokenRelayHtml(port))
+        return
+      }
+
+      res.writeHead(404)
+      res.end('Not found')
     })
 
-    // Listen on all interfaces so both 127.0.0.1 (IPv4) and ::1 (IPv6) work
     server.listen(0, () => {
       const addr = server.address()
       const port = typeof addr === 'object' && addr ? addr.port : 0
@@ -304,3 +291,94 @@ function startCallbackServer(expectedState: string): Promise<{
     })
   })
 }
+
+/* v8 ignore start */
+function getTokenRelayHtml(port: number): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>HPE Navigator — Token Relay</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 640px; margin: 40px auto; padding: 20px; background: #f5f5f5; }
+    .card { background: white; border-radius: 8px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    h1 { color: #01a982; margin-top: 0; }
+    .step { margin: 16px 0; padding: 12px; background: #f8f9fa; border-left: 3px solid #01a982; border-radius: 4px; }
+    .step-num { font-weight: bold; color: #01a982; }
+    textarea { width: 100%; height: 80px; margin: 8px 0; font-family: monospace; font-size: 12px; padding: 8px; border: 2px solid #ddd; border-radius: 4px; resize: vertical; }
+    textarea:focus { border-color: #01a982; outline: none; }
+    button { background: #01a982; color: white; border: none; padding: 12px 24px; border-radius: 4px; font-size: 14px; cursor: pointer; }
+    button:hover { background: #018a6e; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .success { color: #01a982; font-weight: bold; display: none; }
+    .error { color: #c00; display: none; margin-top: 8px; }
+    .bookmarklet { display: inline-block; padding: 8px 16px; background: #333; color: #fff; border-radius: 4px; text-decoration: none; font-size: 13px; margin: 8px 0; }
+    .bookmarklet:hover { background: #555; }
+    code { background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+    .divider { border-top: 1px solid #eee; margin: 20px 0; padding-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>HPE Navigator — Token Relay</h1>
+
+    <div class="step">
+      <span class="step-num">Option A:</span> Drag this bookmarklet to your bookmark bar, then click it on the Navigator page after logging in:<br>
+      <a class="bookmarklet" href="javascript:void((function(){try{var s=localStorage.getItem('auth');if(!s)return alert('No auth data found in localStorage. Make sure you are on Navigator and logged in.');var d=JSON.parse(s);if(!d.token)return alert('No token in auth data.');window.location='http://localhost:${port}/callback?token='+encodeURIComponent(d.token)}catch(e){alert('Error: '+e.message)}})())">📋 Relay Token</a>
+    </div>
+
+    <div class="divider">
+      <span class="step-num">Option B:</span> Paste the token manually:
+    </div>
+
+    <div class="step">
+      In Navigator browser tab: <code>DevTools → Application → Local Storage → https://navigator.service.suptools.hpecorp.net</code><br>
+      Find key <code>auth</code>, copy the <code>token</code> value from the JSON and paste below:
+    </div>
+
+    <textarea id="token" placeholder="Paste your CXO token here (eyJ...)"></textarea>
+    <button id="submit" onclick="submitToken()">Submit Token</button>
+
+    <p class="success" id="success">✓ Token received! You can close this window.</p>
+    <p class="error" id="error"></p>
+  </div>
+
+  <script>
+    // Handle bookmarklet redirect with token in URL
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('token')) {
+      document.getElementById('token').value = params.get('token');
+      submitToken();
+    }
+
+    async function submitToken() {
+      const token = document.getElementById('token').value.trim();
+      if (!token) return;
+      if (!token.startsWith('eyJ')) {
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = 'Token should start with "eyJ" (JWT format)';
+        return;
+      }
+      try {
+        const res = await fetch('http://localhost:${port}/callback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token })
+        });
+        if (res.ok) {
+          document.getElementById('success').style.display = 'block';
+          document.getElementById('submit').disabled = true;
+          document.getElementById('error').style.display = 'none';
+        } else {
+          throw new Error('Server rejected token');
+        }
+      } catch (e) {
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = 'Failed to relay token: ' + e.message;
+      }
+    }
+  </script>
+</body>
+</html>`
+}
+/* v8 ignore end */
